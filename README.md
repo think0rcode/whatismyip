@@ -1,4 +1,4 @@
-# whatismyip
+# Yet-Another-Cloudflare-DDNS
 
 A Cloudflare Worker that returns your public IP address and automatically updates DNS records.
 
