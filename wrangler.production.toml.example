@@ -15,5 +15,5 @@ id = "your-actual-production-kv-namespace-id"
 preview_id = "your-actual-preview-kv-namespace-id"
 
 [env.production.vars]
-CF_ZONE_ID = "your zone id"
-CF_DOMAIN = "your domain"
+CF_ZONE_ID = "your-actual-zone-id"
+CF_DOMAIN = "yourdomain.com"

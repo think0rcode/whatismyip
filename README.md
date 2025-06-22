@@ -1,213 +1,238 @@
 # whatismyip
 
-A Cloudflare Worker written in Rust that returns your public IP address in one of three formats depending on the request:
+A Cloudflare Worker that returns your public IP address and automatically updates DNS records.
 
-1. **Plain text** – always returns two lines: the IPv4 address on the first line and the IPv6 address on the second. Missing values are left blank.
-2. **JSON** – returns `{ "ipv4": "...", "ipv6": "..." }`.
-3. **XML** – returns `<ip><ipv4>...</ipv4><ipv6>...</ipv6></ip>`.
+## What It Does
 
-The response type is chosen based on the request's `Accept` header. If that header is missing,
-the default format will be Plain text.
+This worker provides three main features:
 
-## Usage Examples
+1. **Returns your IP address** in different formats (text, JSON, or XML)
+2. **Stores IP history** using Cloudflare KV storage
+3. **Updates DNS records** automatically when your IP changes
+
+## Quick Start
+
+### 1. Get Your IP Address
 
 ```bash
-# Get IP in plain text format (default)
-curl "https://your-worker.your-subdomain.workers.dev?homename=myhome"
+# Plain text (default) - shows IPv4 on first line, IPv6 on second line
+curl "https://your-worker.workers.dev?homename=myhome"
 
-# Get IP in JSON format
-curl -H "Accept: application/json" https://your-worker.your-subdomain.workers.dev
+# JSON format
+curl -H "Accept: application/json" "https://your-worker.workers.dev?homename=myhome"
 
-# Get IP in XML format
-curl -H "Accept: application/xml" https://your-worker.your-subdomain.workers.dev
+# XML format  
+curl -H "Accept: application/xml" "https://your-worker.workers.dev?homename=myhome"
 ```
 
-Each request requires a `homename` query parameter containing only letters,
-numbers, `-`, `_`, or `.`. The worker stores the last seen IPs for that homename in KV and,
-when configured, updates the associated Cloudflare DNS records if the address
-changes.
+The `homename` parameter is required and can contain letters, numbers, `-`, `_`, or `.`
 
-## Authentication
+### 2. Response Formats
 
-If the `API_TOKEN` secret is set in the worker's environment, the worker
-expects an `Authorization: Bearer <token>` header on all requests. The token
-comparison is performed using constant-time equality via the `subtle` crate to
-help avoid timing attacks.
+**Plain Text (default):**
+```
+192.168.1.100
+2001:db8::1
+```
 
-## Development
+**JSON:**
+```json
+{"ipv4": "192.168.1.100", "ipv6": "2001:db8::1"}
+```
+
+**XML:**
+```xml
+<ip><ipv4>192.168.1.100</ipv4><ipv6>2001:db8::1</ipv6></ip>
+```
+
+## Setup & Deployment
 
 ### Prerequisites
 
 - [Rust](https://rustup.rs/) (latest stable)
-- [Node.js](https://nodejs.org/) (for npx)
+- [Node.js](https://nodejs.org/) (for wrangler)
+- Cloudflare account
 
-### Running Tests
-
-Run unit tests with:
+### Step 1: Install Tools
 
 ```bash
-cargo test
+# Install Rust worker build tool
+cargo install worker-build
+
+# Login to Cloudflare
+npx wrangler login
 ```
 
-### Local Development
+### Step 2: Configure Your Worker
 
-To run the worker locally for development:
+Edit `wrangler.toml` and replace the placeholder values:
+
+```toml
+name = "your-worker-name"  # Choose your worker name
+main = "build/worker/shim.mjs"
+compatibility_date = "2023-12-01"
+
+[build]
+command = "cargo install -q worker-build && worker-build --release"
+
+# Replace with your actual KV namespace ID (see Step 3)
+[[kv_namespaces]]
+binding = "IP_STORE"
+id = "your-actual-kv-namespace-id"
+preview_id = "your-actual-preview-kv-namespace-id"
+
+[vars]
+CF_ZONE_ID = "your-actual-zone-id"     # Your Cloudflare Zone ID
+CF_DOMAIN = "yourdomain.com"           # Your domain name
+```
+
+### Step 3: Create KV Namespace
 
 ```bash
-# Make sure you have set up your .dev.vars file first
-cp .dev.vars.example .dev.vars
-# Edit .dev.vars with your actual values
+# Create KV storage for IP addresses and DNS record IDs
+npx wrangler kv namespace create IP_STORE
+npx wrangler kv namespace create IP_STORE --preview
+```
 
+Copy the namespace IDs from the output into your `wrangler.toml` file.
+
+### Step 4: Set Secrets
+
+```bash
+# Required: Cloudflare API token for DNS updates
+npx wrangler secret put CF_API_TOKEN
+
+# Optional: API token for request authentication (leave empty to disable)
+npx wrangler secret put API_TOKEN
+```
+
+**To get your Cloudflare API token:**
+1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com/profile/api-tokens)
+2. Create token with permissions: `Zone:Zone:Read`, `Zone:DNS:Edit`
+3. Include your specific zone in the token scope
+
+### Step 5: Deploy
+
+```bash
+# Deploy your worker
+npx wrangler deploy
+```
+
+Your worker will be available at: `https://your-worker-name.your-subdomain.workers.dev`
+
+## Configuration Options
+
+### Environment Variables (Secrets)
+
+Set these using `npx wrangler secret put <NAME>`:
+
+- **`CF_API_TOKEN`** (required): Cloudflare API token for DNS operations
+- **`API_TOKEN`** (optional): If set, requires `Authorization: Bearer <token>` header on all requests
+
+### Variables in wrangler.toml
+
+- **`CF_ZONE_ID`**: Your Cloudflare Zone ID (found in domain overview)
+- **`CF_DOMAIN`**: Your domain name (e.g., `example.com`)
+
+## How DNS Updates Work
+
+1. **First request**: Worker checks if DNS records exist for `homename.yourdomain.com`
+2. **IP change detected**: Worker automatically creates or updates A/AAAA records
+3. **Record IDs stored**: Worker remembers DNS record IDs in KV storage for efficiency
+4. **Future requests**: Worker uses stored IDs to update records quickly
+
+**Example**: If `homename=home` and `CF_DOMAIN=example.com`, the worker manages:
+- `home.example.com` A record (IPv4)
+- `home.example.com` AAAA record (IPv6)
+
+## Security
+
+### Authentication (Optional)
+
+If you set the `API_TOKEN` secret, all requests must include:
+
+```bash
+curl -H "Authorization: Bearer your-secret-token" \
+     "https://your-worker.workers.dev?homename=myhome"
+```
+
+### Safe Configuration
+
+- Secrets are stored securely in Cloudflare Workers
+- KV namespace IDs in `wrangler.toml` are safe to commit
+- No sensitive data is exposed in the repository
+
+## Development
+
+### Local Testing
+
+```bash
 # Run locally (uses preview KV namespace)
 npx wrangler dev
 ```
 
-## Deployment
+Test locally at: `http://localhost:8787?homename=test`
 
-### Security Note
+### Running Tests
 
-This repository uses a secure configuration approach to prevent leaking sensitive KV namespace IDs:
+```bash
+# Run Rust unit tests
+cargo test
+```
 
-- `wrangler.toml` - Contains placeholder values safe for public repositories
-- `wrangler.production.toml.example` - Template for production configuration
-- `wrangler.production.toml` - Your actual production config (git-ignored)
-- `.env` - Your environment variables (git-ignored)
+## Production Setup
 
-### Deploy to Cloudflare Workers
+For production, you can create a separate configuration:
 
-1. **Install worker-build for Rust compilation:**
-   ```bash
-   cargo install worker-build
-   ```
+1. Copy `wrangler.production.toml.example` to `wrangler.production.toml`
+2. Configure production-specific values
+3. Deploy with: `npx wrangler deploy --config wrangler.production.toml --env production`
 
-2. **Login to Cloudflare:**
-   ```bash
-   npx wrangler login
-   ```
-
-3. **Configure your worker name (optional):**
-   Edit `wrangler.toml` and change the `name` field to your preferred worker name.
-
-4. **Set up environment variables:**
-   ```bash
-   # For local development, copy and edit the .dev.vars file
-   cp .dev.vars.example .dev.vars
-   # Edit .dev.vars with your actual values
-   
-   # For production deployment, you have two options:
-   
-   # Option 1: Use wrangler secrets (recommended for sensitive data)
-   npx wrangler secret put CF_API_TOKEN
-   npx wrangler secret put API_TOKEN  # optional
-   
-   # Option 2: Set values directly in wrangler.production.toml (not recommended for secrets)
-   # Edit wrangler.production.toml and uncomment/set the [env.production.vars] values
-   ```
-
-5. **Create KV namespace and production config:**
-   ```bash
-   # Create the required KV namespace for storing IP addresses and DNS record IDs
-   npx wrangler kv namespace create PROD_KV
-   
-   # Create production configuration file (not committed to git)
-   cp wrangler.production.toml.example wrangler.production.toml
-   ```
-   
-   After creating the namespace, you'll see output like:
-   ```
-   [[kv_namespaces]]
-   binding = "PROD_KV"
-   id = "your-actual-namespace-id-here"
-   ```
-   
-   **Important**: Update your `wrangler.production.toml` file with the actual namespace ID from the output above. This file is git-ignored to keep your KV namespace IDs private. The KV namespace should be configured under the production environment section as `[[env.production.kv_namespaces]]`.
-
-6. **Set up authentication (optional):**
-   If you want to require API token authentication, make sure the `API_TOKEN` 
-   variable is set in your `.env` file. This was already covered in step 4.
-
-7. **Deploy:**
-   ```bash
-   # Deploy to production using your private production config
-   npx wrangler deploy --config wrangler.production.toml --env production
-   
-   # Or deploy to default environment for testing
-   npx wrangler deploy
-   ```
-
-   Your worker will be available at `https://your-worker-name.your-subdomain.workers.dev`
-   
-   **Environment Management:**
-   - `npx wrangler deploy` - Uses default configuration (safe for public repo)
-   - `npx wrangler deploy --config wrangler.production.toml --env production` - Uses private production config
-   - `npx wrangler dev` - Local development with preview KV namespace
-
-### Environment Variables
-
-The worker uses the following environment variables:
-
-- `CF_ZONE_ID`: Cloudflare Zone ID used for DNS updates
-- `CF_DOMAIN`: The domain name to use for DNS records
-- `CF_API_TOKEN`: Cloudflare API token with permission to edit DNS records
-- `API_TOKEN` (optional): If set, requires Bearer token authentication for all requests
-
-**Configuration:**
-
-**For Local Development:**
-- Copy `.dev.vars.example` to `.dev.vars` and fill in your values
-- The `.dev.vars` file is used by `wrangler dev` for local development
-- This file is ignored by git to keep your configuration private
-
-**For Production Deployment:**
-- Use `wrangler secret put` for sensitive values like API tokens (recommended)
-- Or set values directly in your `wrangler.production.toml` file for non-sensitive configuration
-
-### Automatic DNS Record Management
-
-The worker now automatically manages DNS record IDs without requiring manual setup:
-
-1. **First Request**: When a `homename` is used for the first time, the worker will:
-   - Check KV storage for existing DNS record IDs
-   - If not found, query Cloudflare to find existing DNS records for `homename.CF_DOMAIN`
-   - If no records exist, create new DNS records when IP addresses are updated
-   - Store the record IDs in KV for future use
-
-2. **Subsequent Requests**: The worker uses the stored record IDs to update DNS records efficiently
-
-**Note**: The worker requires a KV namespace to store IP addresses and DNS record IDs. The KV binding name is hardcoded in the source code and must match the binding name in your wrangler configuration. No manual DNS record ID setup is required - the worker handles this automatically.
-
-### Custom Domain (Optional)
-
-To use a custom domain:
+## Custom Domain (Optional)
 
 1. Add your domain to Cloudflare
-2. In the Cloudflare dashboard, go to Workers & Pages
-3. Select your worker
-4. Go to Settings > Triggers
-5. Add a custom domain
+2. In Cloudflare dashboard: Workers & Pages → Your Worker → Settings → Triggers
+3. Add custom domain
 
 ## Project Structure
 
 ```
 whatismyip/
 ├── src/
-│   ├── lib.rs          # Main worker entry point and routing
-│   ├── auth.rs         # Authentication logic and token validation
-│   ├── config.rs       # Configuration management and environment variables
-│   ├── dns.rs          # Cloudflare DNS record management
-│   ├── ip.rs           # IP address extraction and validation
-│   ├── request.rs      # Request handling and validation
-│   ├── response.rs     # Response formatting (plain text, JSON, XML)
-│   └── service.rs      # Core service logic and IP storage
-├── Cargo.toml          # Rust dependencies and package configuration
-├── Cargo.lock          # Dependency lock file
-├── wrangler.toml       # Cloudflare Workers configuration (public)
-├── wrangler.production.toml.example  # Production config template
-├── .env.example        # Environment variables template
-├── .gitignore          # Git ignore patterns
-└── README.md           # This file
+│   ├── lib.rs          # Main worker entry point
+│   ├── auth.rs         # Authentication logic
+│   ├── config.rs       # Configuration management
+│   ├── dns.rs          # DNS record management
+│   ├── ip.rs           # IP address handling
+│   ├── request.rs      # Request parsing and validation
+│   ├── response.rs     # Response formatting
+│   └── service.rs      # Core business logic
+├── wrangler.toml       # Worker configuration
+├── wrangler.production.toml.example  # Production template
+└── Cargo.toml          # Rust dependencies
 ```
 
-## License
+## Troubleshooting
 
-This project is configured for deployment with `wrangler` and any other Cloudflare Worker toolchain that consumes a `cdylib` WebAssembly target.
+### Common Issues
+
+**"homename parameter required"**
+- Add `?homename=yourname` to your URL
+
+**"Unauthorized"**
+- Either remove `API_TOKEN` secret or add `Authorization: Bearer <token>` header
+
+**DNS updates not working**
+- Check `CF_API_TOKEN` has correct permissions
+- Verify `CF_ZONE_ID` and `CF_DOMAIN` are correct
+- Check Cloudflare dashboard for DNS records
+
+**KV errors**
+- Ensure KV namespace is created and ID is correct in `wrangler.toml`
+
+### Getting Help
+
+Check the worker logs:
+```bash
+npx wrangler tail
+```
