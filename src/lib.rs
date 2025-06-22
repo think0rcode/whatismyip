@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use worker::*;
 
 /// Represents the IP address payload returned by the API
@@ -6,6 +6,14 @@ use worker::*;
 struct IpPayload {
     ipv4: String,
     ipv6: String,
+}
+
+/// Cloudflare DNS record identifiers stored in KV
+#[derive(Deserialize)]
+struct DnsRecordInfo {
+    record_name: String,
+    a_id: Option<String>,
+    aaaa_id: Option<String>,
 }
 
 /// Supported response formats
@@ -47,6 +55,14 @@ fn split_ip(ip: &str) -> (String, String) {
     }
 }
 
+/// Validates that the homename only contains ASCII letters, '-' or '_'
+fn validate_homename(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphabetic() || c == '-' || c == '_')
+}
+
 /// Formats IP addresses as plain text
 fn text_body(ipv4: &str, ipv6: &str) -> String {
     format!("{}\n{}\n", ipv4, ipv6)
@@ -80,6 +96,82 @@ fn check_auth(req: &Request, env: &Env) -> bool {
     check_auth_with_token(auth_header.as_deref(), api_token.as_deref())
 }
 
+/// Updates a Cloudflare DNS record
+async fn update_dns_record(
+    zone_id: &str,
+    token: &str,
+    record_id: &str,
+    record_type: &str,
+    name: &str,
+    content: &str,
+) -> Result<bool> {
+    let url = format!(
+        "https://api.cloudflare.com/client/v4/zones/{}/dns_records/{}",
+        zone_id, record_id
+    );
+    let body = serde_json::json!({
+        "type": record_type,
+        "name": name,
+        "content": content,
+        "ttl": 1,
+        "proxied": false
+    });
+    let mut init = RequestInit::new();
+    init.with_method(Method::Put);
+    init.with_body(Some(body.to_string().into()));
+    let mut req = Request::new_with_init(&url, &init)?;
+    req
+        .headers_mut()?
+        .set("Authorization", &format!("Bearer {}", token))?;
+    req.headers_mut()?.set("Content-Type", "application/json")?;
+    let mut resp = Fetch::Request(req).send().await?;
+    let value: serde_json::Value = resp.json().await?;
+    Ok(value
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false))
+}
+
+/// Checks KV for stored IP and updates DNS if necessary
+async fn maybe_update_dns(homename: &str, ipv4: &str, ipv6: &str, env: &Env) -> Result<()> {
+    let kv = env.kv("IP_STORE")?;
+    let dns_key = format!("{}_dns_rocord_id", homename);
+    let dns_info_value = match kv.get(&dns_key).text().await? {
+        Some(v) => v,
+        None => return Ok(()),
+    };
+    let dns_info: DnsRecordInfo = serde_json::from_str(&dns_info_value)
+        .map_err(|e| Error::RustError(format!("Failed to parse dns info: {}", e)))?;
+    let zone_id = env.var("CF_ZONE_ID")?.to_string();
+    let token = env.secret("CF_API_TOKEN")?.to_string();
+
+    if !ipv4.is_empty() {
+        let key = format!("{}_v4", homename);
+        let prev = kv.get(&key).text().await?.unwrap_or_default();
+        if prev != ipv4 {
+            if let Some(id) = dns_info.a_id.as_deref() {
+                if update_dns_record(&zone_id, &token, id, "A", &dns_info.record_name, ipv4).await? {
+                    kv.put(&key, ipv4)?.execute().await?;
+                }
+            }
+        }
+    }
+
+    if !ipv6.is_empty() {
+        let key = format!("{}_v6", homename);
+        let prev = kv.get(&key).text().await?.unwrap_or_default();
+        if prev != ipv6 {
+            if let Some(id) = dns_info.aaaa_id.as_deref() {
+                if update_dns_record(&zone_id, &token, id, "AAAA", &dns_info.record_name, ipv6).await? {
+                    kv.put(&key, ipv6)?.execute().await?;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Creates a response in the specified format
 async fn respond(format: Format, ipv4: String, ipv6: String) -> Result<Response> {
     match format {
@@ -104,15 +196,25 @@ pub async fn handler(req: Request, env: Env) -> Result<Response> {
     if !check_auth(&req, &env) {
         return Response::error("Unauthorized", 401);
     }
-    
+
+    let url = req.url()?;
+    let homename = match url.query_pairs().find(|(k, _)| k == "homename") {
+        Some((_, value)) => value.to_string(),
+        None => return Response::error("homename parameter required", 400),
+    };
+    if !validate_homename(&homename) {
+        return Response::error("invalid homename", 400);
+    }
+
     let ip = req
         .headers()
         .get("CF-Connecting-IP")?
         .unwrap_or_default();
-    
+
     let (ipv4, ipv6) = split_ip(&ip);
+    maybe_update_dns(&homename, &ipv4, &ipv6, &env).await?;
     let fmt = detect_format(&req);
-    
+
     respond(fmt, ipv4, ipv6).await
 }
 
@@ -423,5 +525,15 @@ mod tests {
             let result = check_auth_with_token(auth_header, api_token);
             assert_eq!(result, expected, "Failed test case: {}", description);
         }
+    }
+
+    #[test]
+    fn homename_validation() {
+        assert!(validate_homename("home"));
+        assert!(validate_homename("home-name"));
+        assert!(validate_homename("home_name"));
+        assert!(!validate_homename(""));
+        assert!(!validate_homename("home123"));
+        assert!(!validate_homename("home!"));
     }
 }

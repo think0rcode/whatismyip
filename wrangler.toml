@@ -14,5 +14,11 @@ main = "./worker/shim.mjs"
 type = "CompiledWasm"
 globs = ["**/*.wasm"]
 
+[[kv_namespaces]]
+binding = "IP_STORE"
+id = "00000000000000000000000000000000"
+preview_id = "00000000000000000000000000000000"
+
 [env.production.vars]
-# Set API_TOKEN as a secret in Cloudflare dashboard or via wrangler secret put API_TOKEN 
+# Set API_TOKEN as a secret in Cloudflare dashboard or via wrangler secret put API_TOKEN
+CF_ZONE_ID = "00000000000000000000000000000000"

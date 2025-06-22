@@ -13,7 +13,7 @@ the default format will be Plain text.
 
 ```bash
 # Get IP in plain text format (default)
-curl https://your-worker.your-subdomain.workers.dev
+curl "https://your-worker.your-subdomain.workers.dev?homename=myhome"
 
 # Get IP in JSON format
 curl -H "Accept: application/json" https://your-worker.your-subdomain.workers.dev
@@ -21,6 +21,11 @@ curl -H "Accept: application/json" https://your-worker.your-subdomain.workers.de
 # Get IP in XML format
 curl -H "Accept: application/xml" https://your-worker.your-subdomain.workers.dev
 ```
+
+Each request requires a `homename` query parameter containing only letters,
+`-`, or `_`. The worker stores the last seen IPs for that homename in KV and,
+when configured, updates the associated Cloudflare DNS records if the address
+changes.
 
 ## Authentication
 
@@ -87,6 +92,20 @@ npx wrangler dev
 ### Environment Variables
 
 - `API_TOKEN` (optional): If set, requires Bearer token authentication for all requests
+- `CF_ZONE_ID`: Cloudflare Zone ID used for DNS updates
+- `CF_API_TOKEN` (secret): Token with permission to edit DNS records
+
+### Storing DNS Record IDs
+
+Create a Workers KV namespace called `IP_STORE` and store DNS record
+information for each `homename` you intend to use:
+
+```bash
+npx wrangler kv:key put --binding=IP_STORE myhome_dns_rocord_id \
+'{"record_name":"foo.example.com","a_id":"<A_RECORD_ID>","aaaa_id":"<AAAA_RECORD_ID>"}'
+```
+
+Only `record_name` and `a_id` are required. Include `aaaa_id` for IPv6 updates.
 
 ### Custom Domain (Optional)
 
