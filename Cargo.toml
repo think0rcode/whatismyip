@@ -7,7 +7,6 @@ edition = "2024"
 worker = "0.6"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-subtle = "2"
 
 [lib]
 crate-type = ["cdylib"]
