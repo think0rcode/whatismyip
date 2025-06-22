@@ -24,7 +24,7 @@ curl -H "Accept: application/xml" https://your-worker.your-subdomain.workers.dev
 
 ## Authentication
 
-If the `API_TOKEN` environment variable is provided at compile time, the worker
+If the `API_TOKEN` secret is set in the worker's environment, the worker
 expects an `Authorization: Bearer <token>` header on all requests. The token
 comparison is performed using constant-time equality via the `subtle` crate to
 help avoid timing attacks.
