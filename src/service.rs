@@ -14,7 +14,7 @@ impl DnsUpdateService {
         env: &Env,
         config: &Config,
     ) -> Result<()> {
-        let kv = env.kv(&config.kv_namespace)?;
+        let kv = env.kv("IP_STORE")?;
         let dns_manager =
             DnsManager::new(config.cf_zone_id.clone(), config.cf_api_token.clone(), &kv);
 

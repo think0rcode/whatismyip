@@ -5,7 +5,6 @@ pub const ENV_API_TOKEN: &str = "API_TOKEN";
 pub const ENV_CF_ZONE_ID: &str = "CF_ZONE_ID";
 pub const ENV_CF_API_TOKEN: &str = "CF_API_TOKEN";
 pub const ENV_CF_DOMAIN: &str = "CF_DOMAIN";
-pub const ENV_KV_NAMESPACE: &str = "KV_NAMESPACE";
 
 /// Application configuration extracted from environment variables
 pub struct Config {
@@ -17,8 +16,6 @@ pub struct Config {
     pub cf_api_token: String,
     /// Domain name to append to hostnames for DNS records
     pub cf_domain: String,
-    /// KV namespace binding name for storing IP addresses and DNS record IDs
-    pub kv_namespace: String,
 }
 
 impl Config {
@@ -29,7 +26,6 @@ impl Config {
             cf_zone_id: env.var(ENV_CF_ZONE_ID)?.to_string(),
             cf_api_token: env.secret(ENV_CF_API_TOKEN)?.to_string(),
             cf_domain: env.var(ENV_CF_DOMAIN)?.to_string(),
-            kv_namespace: env.var(ENV_KV_NAMESPACE)?.to_string(),
         })
     }
 }

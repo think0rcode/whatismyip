@@ -5,25 +5,13 @@ compatibility_date = "2023-12-01"
 [build]
 command = "cargo install -q worker-build && worker-build --release"
 
-[build.upload]
-format = "modules"
-dir = "build"
-main = "./worker/shim.mjs"
-
-[[build.upload.rules]]
-type = "CompiledWasm"
-globs = ["**/*.wasm"]
-
 # Example KV namespace configuration - replace with your actual values
 # For production, create a separate wrangler.production.toml file
 [[kv_namespaces]]
-binding = "KV_TEST"
+binding = "IP_STORE"
 id = "your-kv-namespace-id-here"
 preview_id = "your-preview-kv-namespace-id-here"
 
-[env.production.vars]
-# Environment variables loaded from .env file or set via wrangler secret
-# Copy .env.example to .env and fill in your actual values
-CF_ZONE_ID = { env = "CF_ZONE_ID" }
-CF_DOMAIN = { env = "CF_DOMAIN" }
-KV_NAMESPACE = "KV_TEST"
+[vars]
+CF_ZONE_ID = "your-zone-id-here"
+CF_DOMAIN = "your-domain.com"

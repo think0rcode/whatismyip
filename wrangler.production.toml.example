@@ -5,22 +5,15 @@ compatibility_date = "2023-12-01"
 [build]
 command = "cargo install -q worker-build && worker-build --release"
 
-[build.upload]
-format = "modules"
-dir = "build"
-main = "./worker/shim.mjs"
-
-[[build.upload.rules]]
-type = "CompiledWasm"
-globs = ["**/*.wasm"]
+# Production environment configuration
+[env.production]
 
 # Production KV namespace configuration
-[[kv_namespaces]]
-binding = "PROD_IP_STORE"
+[[env.production.kv_namespaces]]
+binding = "IP_STORE"
 id = "your-actual-production-kv-namespace-id"
 preview_id = "your-actual-preview-kv-namespace-id"
 
 [env.production.vars]
-CF_ZONE_ID = { env = "CF_ZONE_ID" }
-CF_DOMAIN = { env = "CF_DOMAIN" }
-KV_NAMESPACE = "PROD_IP_STORE" 
+CF_ZONE_ID = "your zone id"
+CF_DOMAIN = "your domain"

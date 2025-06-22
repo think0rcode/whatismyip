@@ -54,9 +54,9 @@ cargo test
 To run the worker locally for development:
 
 ```bash
-# Make sure you have set up your .env file first
-cp .env.example .env
-# Edit .env with your actual values
+# Make sure you have set up your .dev.vars file first
+cp .dev.vars.example .dev.vars
+# Edit .dev.vars with your actual values
 
 # Run locally (uses preview KV namespace)
 npx wrangler dev
@@ -90,25 +90,24 @@ This repository uses a secure configuration approach to prevent leaking sensitiv
 
 4. **Set up environment variables:**
    ```bash
-   # Copy the example environment file
-   cp .env.example .env
+   # For local development, copy and edit the .dev.vars file
+   cp .dev.vars.example .dev.vars
+   # Edit .dev.vars with your actual values
    
-   # Edit .env and fill in your actual values:
-   # CF_ZONE_ID=your-cloudflare-zone-id-here
-   # CF_DOMAIN=your-domain-name-here
+   # For production deployment, you have two options:
    
-   # Set the Cloudflare API token as a secret (required for DNS updates)
+   # Option 1: Use wrangler secrets (recommended for sensitive data)
    npx wrangler secret put CF_API_TOKEN
-   # Enter your Cloudflare API token when prompted
+   npx wrangler secret put API_TOKEN  # optional
    
-   # Optional: Set API token for request authentication
-   # npx wrangler secret put API_TOKEN
+   # Option 2: Set values directly in wrangler.production.toml (not recommended for secrets)
+   # Edit wrangler.production.toml and uncomment/set the [env.production.vars] values
    ```
 
 5. **Create KV namespace and production config:**
    ```bash
    # Create the required KV namespace for storing IP addresses and DNS record IDs
-   npx wrangler kv:namespace create PROD_IP_STORE
+   npx wrangler kv namespace create PROD_KV
    
    # Create production configuration file (not committed to git)
    cp wrangler.production.toml.example wrangler.production.toml
@@ -117,19 +116,15 @@ This repository uses a secure configuration approach to prevent leaking sensitiv
    After creating the namespace, you'll see output like:
    ```
    [[kv_namespaces]]
-   binding = "PROD_IP_STORE"
+   binding = "PROD_KV"
    id = "your-actual-namespace-id-here"
    ```
    
-   **Important**: Update your `wrangler.production.toml` file with the actual namespace ID from the output above. This file is git-ignored to keep your KV namespace IDs private.
+   **Important**: Update your `wrangler.production.toml` file with the actual namespace ID from the output above. This file is git-ignored to keep your KV namespace IDs private. The KV namespace should be configured under the production environment section as `[[env.production.kv_namespaces]]`.
 
 6. **Set up authentication (optional):**
-   If you want to require API token authentication:
-   ```bash
-   # Set the API_TOKEN secret
-   npx wrangler secret put API_TOKEN
-   # Enter your desired token when prompted
-   ```
+   If you want to require API token authentication, make sure the `API_TOKEN` 
+   variable is set in your `.env` file. This was already covered in step 4.
 
 7. **Deploy:**
    ```bash
@@ -151,19 +146,21 @@ This repository uses a secure configuration approach to prevent leaking sensitiv
 
 The worker uses the following environment variables:
 
-**Set in `.env` file:**
 - `CF_ZONE_ID`: Cloudflare Zone ID used for DNS updates
 - `CF_DOMAIN`: The domain name to use for DNS records
-- `KV_NAMESPACE`: KV namespace binding name (must match the binding in your wrangler config)
-
-**Set as Wrangler secrets:**
-- `CF_API_TOKEN` (secret): Cloudflare API token with permission to edit DNS records
+- `CF_API_TOKEN`: Cloudflare API token with permission to edit DNS records
 - `API_TOKEN` (optional): If set, requires Bearer token authentication for all requests
 
 **Configuration:**
-- Copy `.env.example` to `.env` and fill in your values
-- The `.env` file is ignored by git to keep your configuration private
-- Sensitive tokens are stored as encrypted Wrangler secrets
+
+**For Local Development:**
+- Copy `.dev.vars.example` to `.dev.vars` and fill in your values
+- The `.dev.vars` file is used by `wrangler dev` for local development
+- This file is ignored by git to keep your configuration private
+
+**For Production Deployment:**
+- Use `wrangler secret put` for sensitive values like API tokens (recommended)
+- Or set values directly in your `wrangler.production.toml` file for non-sensitive configuration
 
 ### Automatic DNS Record Management
 
@@ -177,7 +174,7 @@ The worker now automatically manages DNS record IDs without requiring manual set
 
 2. **Subsequent Requests**: The worker uses the stored record IDs to update DNS records efficiently
 
-**Note**: The worker requires a KV namespace (configured via `KV_NAMESPACE` environment variable) to store IP addresses and DNS record IDs. The namespace binding name must match between your wrangler configuration and environment variable. No manual DNS record ID setup is required - the worker handles this automatically.
+**Note**: The worker requires a KV namespace to store IP addresses and DNS record IDs. The KV binding name is hardcoded in the source code and must match the binding name in your wrangler configuration. No manual DNS record ID setup is required - the worker handles this automatically.
 
 ### Custom Domain (Optional)
 
