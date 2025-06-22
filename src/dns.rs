@@ -3,7 +3,7 @@ use worker::*;
 
 // Constants for better maintainability
 const CLOUDFLARE_API_BASE: &str = "https://api.cloudflare.com/client/v4";
-const DNS_TTL: u32 = 1;
+const DNS_TTL: u32 = 60;
 const CONTENT_TYPE_JSON: &str = "application/json";
 
 /// DNS record types supported by this implementation
