@@ -1,0 +1,18 @@
+name = "whatismyip"
+main = "build/worker/shim.mjs"
+compatibility_date = "2023-12-01"
+
+[build]
+command = "cargo install -q worker-build && worker-build --release"
+
+[build.upload]
+format = "modules"
+dir = "build"
+main = "./worker/shim.mjs"
+
+[[build.upload.rules]]
+type = "CompiledWasm"
+globs = ["**/*.wasm"]
+
+[env.production.vars]
+# Set API_TOKEN as a secret in Cloudflare dashboard or via wrangler secret put API_TOKEN 
