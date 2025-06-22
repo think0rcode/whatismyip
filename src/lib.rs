@@ -42,7 +42,9 @@ pub async fn handler(req: Request, env: Env) -> Result<Response> {
     let (ipv4, ipv6) = IpUtils::split_ip(&ctx.client_ip);
 
     // Update DNS records if necessary
-    if let Err(e) = DnsUpdateService::maybe_update_dns(&ctx.homename, &ipv4, &ipv6, &env, &config).await {
+    if let Err(e) =
+        DnsUpdateService::maybe_update_dns(&ctx.homename, &ipv4, &ipv6, &env, &config).await
+    {
         // Log error but don't fail the request
         console_log!("DNS update failed: {}", e);
     }

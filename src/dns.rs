@@ -38,7 +38,9 @@ impl From<DnsError> for Error {
     fn from(err: DnsError) -> Self {
         match err {
             DnsError::ApiError(msg) => Error::RustError(format!("DNS API error: {}", msg)),
-            DnsError::SerializationError(msg) => Error::RustError(format!("Serialization error: {}", msg)),
+            DnsError::SerializationError(msg) => {
+                Error::RustError(format!("Serialization error: {}", msg))
+            }
             DnsError::NotFound => Error::RustError("DNS record not found".to_string()),
             DnsError::InvalidInput(msg) => Error::RustError(format!("Invalid input: {}", msg)),
         }
@@ -147,9 +149,13 @@ impl<'a> DnsManager<'a> {
     }
 
     /// Get or create DNS record IDs for a hostname
-    pub async fn get_or_create_record_ids(&self, homename: &str, record_name: &str) -> Result<DnsRecordInfo> {
+    pub async fn get_or_create_record_ids(
+        &self,
+        homename: &str,
+        record_name: &str,
+    ) -> Result<DnsRecordInfo> {
         let dns_key: String = self.dns_record_key(homename);
-        
+
         // First, check KV for existing record info
         if let Some(dns_info_value) = self.kv.get(&dns_key).text().await? {
             if let Ok(dns_info) = serde_json::from_str::<DnsRecordInfo>(&dns_info_value) {
@@ -182,20 +188,32 @@ impl<'a> DnsManager<'a> {
     }
 
     /// Find an existing DNS record in Cloudflare
-    async fn find_existing_record(&self, name: &str, record_type: RecordType) -> Result<Option<DnsRecord>> {
+    async fn find_existing_record(
+        &self,
+        name: &str,
+        record_type: RecordType,
+    ) -> Result<Option<DnsRecord>> {
         let url = format!(
             "{}/zones/{}/dns_records?name={}&type={}",
-            CLOUDFLARE_API_BASE, self.zone_id, name, record_type.as_str()
+            CLOUDFLARE_API_BASE,
+            self.zone_id,
+            name,
+            record_type.as_str()
         );
 
         let response: ListDnsResponse = self.make_api_request(&url, Method::Get, None).await?;
-        
+
         if !response.success {
-            return Err(DnsError::ApiError(format!("Failed to list DNS records: {:?}", response.errors)).into());
+            return Err(DnsError::ApiError(format!(
+                "Failed to list DNS records: {:?}",
+                response.errors
+            ))
+            .into());
         }
 
         if let Some(records) = response.result {
-            return Ok(records.into_iter()
+            return Ok(records
+                .into_iter()
                 .find(|r| r.name == name && r.record_type == record_type.as_str()));
         }
 
@@ -203,7 +221,12 @@ impl<'a> DnsManager<'a> {
     }
 
     /// Create a new DNS record in Cloudflare
-    async fn create_dns_record(&self, record_type: RecordType, name: &str, content: &str) -> Result<Option<String>> {
+    async fn create_dns_record(
+        &self,
+        record_type: RecordType,
+        name: &str,
+        content: &str,
+    ) -> Result<Option<String>> {
         let url = format!("{}/zones/{}/dns_records", CLOUDFLARE_API_BASE, self.zone_id);
 
         let body = serde_json::json!({
@@ -214,10 +237,16 @@ impl<'a> DnsManager<'a> {
             "proxied": false
         });
 
-        let response: CreateDnsResponse = self.make_api_request(&url, Method::Post, Some(body)).await?;
+        let response: CreateDnsResponse = self
+            .make_api_request(&url, Method::Post, Some(body))
+            .await?;
 
         if !response.success {
-            return Err(DnsError::ApiError(format!("Failed to create DNS record: {:?}", response.errors)).into());
+            return Err(DnsError::ApiError(format!(
+                "Failed to create DNS record: {:?}",
+                response.errors
+            ))
+            .into());
         }
 
         Ok(response.result.map(|record| record.id))
@@ -244,29 +273,40 @@ impl<'a> DnsManager<'a> {
             "proxied": false
         });
 
-        let response: UpdateDnsResponse = self.make_api_request(&url, Method::Put, Some(body)).await?;
-        
+        let response: UpdateDnsResponse =
+            self.make_api_request(&url, Method::Put, Some(body)).await?;
+
         if !response.success {
-            return Err(DnsError::ApiError(format!("Failed to update DNS record: {:?}", response.errors)).into());
+            return Err(DnsError::ApiError(format!(
+                "Failed to update DNS record: {:?}",
+                response.errors
+            ))
+            .into());
         }
 
         Ok(response.success)
     }
 
     /// Make an authenticated API request to Cloudflare
-    async fn make_api_request<T>(&self, url: &str, method: Method, body: Option<serde_json::Value>) -> Result<T>
+    async fn make_api_request<T>(
+        &self,
+        url: &str,
+        method: Method,
+        body: Option<serde_json::Value>,
+    ) -> Result<T>
     where
         T: for<'de> Deserialize<'de>,
     {
         let mut init = RequestInit::new();
         init.with_method(method);
-        
+
         if let Some(body_data) = body {
             init.with_body(Some(body_data.to_string().into()));
         }
 
         let mut req = Request::new_with_init(url, &init)?;
-        req.headers_mut()?.set("Authorization", &format!("Bearer {}", self.token))?;
+        req.headers_mut()?
+            .set("Authorization", &format!("Bearer {}", self.token))?;
         req.headers_mut()?.set("Content-Type", CONTENT_TYPE_JSON)?;
 
         let mut resp = Fetch::Request(req).send().await?;
@@ -285,18 +325,22 @@ impl<'a> DnsManager<'a> {
         match dns_info.get_id(record_type) {
             Some(id) => {
                 // Record exists, update it
-                self.update_dns_record(id, record_type, &dns_info.record_name, content).await
+                self.update_dns_record(id, record_type, &dns_info.record_name, content)
+                    .await
             }
             None => {
                 // Record doesn't exist, create it with the correct content
-                match self.create_dns_record(record_type, &dns_info.record_name, content).await? {
+                match self
+                    .create_dns_record(record_type, &dns_info.record_name, content)
+                    .await?
+                {
                     Some(new_id) => {
                         // Update the dns_info with the new record ID
                         dns_info.set_id(record_type, new_id);
-                        
+
                         // Update KV with the new record info
                         self.store_dns_info(homename, dns_info).await?;
-                        
+
                         // Record created successfully, no need to update again
                         Ok(true)
                     }
@@ -307,7 +351,12 @@ impl<'a> DnsManager<'a> {
     }
 
     /// Check if IP has changed and needs updating
-    async fn should_update_ip(&self, homename: &str, record_type: RecordType, new_ip: &str) -> Result<bool> {
+    async fn should_update_ip(
+        &self,
+        homename: &str,
+        record_type: RecordType,
+        new_ip: &str,
+    ) -> Result<bool> {
         if new_ip.is_empty() {
             return Ok(false);
         }
@@ -332,24 +381,35 @@ impl<'a> DnsManager<'a> {
         ip: &str,
         homename: &str,
     ) -> Result<()> {
-        if self.should_update_ip(homename, record_type, ip).await? && 
-           self.ensure_and_update_record(dns_info, record_type, ip, homename).await? {
+        if self.should_update_ip(homename, record_type, ip).await?
+            && self
+                .ensure_and_update_record(dns_info, record_type, ip, homename)
+                .await?
+        {
             self.store_ip(homename, record_type, ip).await?;
         }
         Ok(())
     }
 
     /// Main method to update DNS records, handling both IPv4 and IPv6
-    pub async fn maybe_update_dns(&self, homename: &str, record_name: &str, ipv4: &str, ipv6: &str) -> Result<()> {
+    pub async fn maybe_update_dns(
+        &self,
+        homename: &str,
+        record_name: &str,
+        ipv4: &str,
+        ipv6: &str,
+    ) -> Result<()> {
         // Get or create DNS record info
         let mut dns_info = self.get_or_create_record_ids(homename, record_name).await?;
 
         // Update IPv4 record if provided
-        self.update_record_if_changed(&mut dns_info, RecordType::A, ipv4, homename).await?;
+        self.update_record_if_changed(&mut dns_info, RecordType::A, ipv4, homename)
+            .await?;
 
         // Update IPv6 record if provided
-        self.update_record_if_changed(&mut dns_info, RecordType::AAAA, ipv6, homename).await?;
+        self.update_record_if_changed(&mut dns_info, RecordType::AAAA, ipv6, homename)
+            .await?;
 
         Ok(())
     }
-} 
+}

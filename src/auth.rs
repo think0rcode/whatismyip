@@ -1,5 +1,5 @@
-use worker::*;
 use crate::config::Config;
+use worker::*;
 
 // Constants
 const HEADER_AUTHORIZATION: &str = "Authorization";
@@ -11,10 +11,7 @@ pub struct AuthUtils;
 impl AuthUtils {
     /// Checks authentication against the request and environment
     pub fn check_auth(req: &Request, config: &Config) -> bool {
-        let auth_header = req.headers()
-            .get(HEADER_AUTHORIZATION)
-            .ok()
-            .flatten();
+        let auth_header = req.headers().get(HEADER_AUTHORIZATION).ok().flatten();
         Self::check_auth_with_token(auth_header.as_deref(), config.api_token.as_deref())
     }
 
@@ -140,4 +137,4 @@ mod tests {
             assert_eq!(result, expected, "Failed: {}", description);
         }
     }
-} 
+}

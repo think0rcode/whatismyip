@@ -40,7 +40,8 @@ impl RequestContext {
 
     /// Extract and validate homename from URL query parameters
     fn extract_homename(url: &Url) -> Result<String> {
-        let homename = url.query_pairs()
+        let homename = url
+            .query_pairs()
             .find(|(k, _)| k == PARAM_HOMENAME)
             .map(|(_, v)| v.to_string())
             .ok_or_else(|| Error::RustError("homename parameter required".to_string()))?;
@@ -54,17 +55,15 @@ impl RequestContext {
 
     /// Extract client IP from Cloudflare headers
     fn extract_client_ip(req: &Request) -> Result<String> {
-        Ok(req.headers()
+        Ok(req
+            .headers()
             .get(HEADER_CF_CONNECTING_IP)?
             .unwrap_or_default())
     }
 
     /// Detects the desired response format from the request
     fn detect_format(req: &Request) -> Format {
-        let accept_header = req.headers()
-            .get(HEADER_ACCEPT)
-            .ok()
-            .flatten();
+        let accept_header = req.headers().get(HEADER_ACCEPT).ok().flatten();
         Self::detect_format_from_accept(accept_header.as_deref())
     }
 
@@ -82,10 +81,12 @@ impl RequestContext {
         Format::Text
     }
 
-    /// Validates that the homename only contains ASCII letters, '-' or '_'
+    /// Validates that the homename only contains ASCII letters, numbers, '-', '_', or '.'
     pub fn is_valid_homename(name: &str) -> bool {
         !name.is_empty()
-            && name.chars().all(|c| c.is_ascii_alphabetic() || c == '-' || c == '_')
+            && name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
     }
 }
 
@@ -167,19 +168,33 @@ mod tests {
             ("valid", true, "simple valid name"),
             ("valid-name", true, "name with hyphen"),
             ("valid_name", true, "name with underscore"),
+            ("valid.name", true, "name with dot"),
             ("ValidName", true, "name with capitals"),
-            ("valid123", false, "name with numbers - should be invalid"),
+            ("valid123", true, "name with numbers"),
+            ("123valid", true, "starts with number"),
+            ("host1", true, "simple name with number"),
+            ("server01.example", true, "complex name with numbers and dot"),
             ("", false, "empty name"),
-            ("invalid.name", false, "name with dot"),
-            ("invalid name", false, "name with space"),
-            ("invalid@name", false, "name with special char"),
+            ("invalid name", false, "name with space - should be invalid"),
+            (
+                "invalid@name",
+                false,
+                "name with special char - should be invalid",
+            ),
             ("a", true, "single character"),
             ("A", true, "single capital"),
+            ("1", true, "single number"),
             ("-", true, "single hyphen"),
             ("_", true, "single underscore"),
+            (".", true, "single dot"),
+            ("valid-name_test.example", true, "complex valid name with dot"),
             ("valid-name_test", true, "complex valid name"),
-            ("123invalid", false, "starts with number"),
-            ("invalid!", false, "ends with special char"),
+            ("web01-server_backup.prod", true, "complex valid name with all allowed chars"),
+            (
+                "invalid!",
+                false,
+                "ends with special char - should be invalid",
+            ),
         ];
 
         for (input, expected, description) in test_cases {
@@ -187,4 +202,4 @@ mod tests {
             assert_eq!(result, expected, "Failed: {}", description);
         }
     }
-} 
+}

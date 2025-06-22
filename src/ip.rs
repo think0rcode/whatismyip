@@ -39,4 +39,4 @@ mod tests {
             assert_eq!(actual_v6, expected_v6, "IPv6 failed for: {}", description);
         }
     }
-} 
+}

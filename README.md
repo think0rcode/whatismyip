@@ -23,7 +23,7 @@ curl -H "Accept: application/xml" https://your-worker.your-subdomain.workers.dev
 ```
 
 Each request requires a `homename` query parameter containing only letters,
-`-`, or `_`. The worker stores the last seen IPs for that homename in KV and,
+numbers, `-`, `_`, or `.`. The worker stores the last seen IPs for that homename in KV and,
 when configured, updates the associated Cloudflare DNS records if the address
 changes.
 
@@ -64,6 +64,15 @@ npx wrangler dev
 
 ## Deployment
 
+### Security Note
+
+This repository uses a secure configuration approach to prevent leaking sensitive KV namespace IDs:
+
+- `wrangler.toml` - Contains placeholder values safe for public repositories
+- `wrangler.production.toml.example` - Template for production configuration
+- `wrangler.production.toml` - Your actual production config (git-ignored)
+- `.env` - Your environment variables (git-ignored)
+
 ### Deploy to Cloudflare Workers
 
 1. **Install worker-build for Rust compilation:**
@@ -96,20 +105,23 @@ npx wrangler dev
    # npx wrangler secret put API_TOKEN
    ```
 
-5. **Create KV namespace:**
+5. **Create KV namespace and production config:**
    ```bash
    # Create the required KV namespace for storing IP addresses and DNS record IDs
-   npx wrangler kv:namespace create IP_STORE
+   npx wrangler kv:namespace create PROD_IP_STORE
+   
+   # Create production configuration file (not committed to git)
+   cp wrangler.production.toml.example wrangler.production.toml
    ```
    
    After creating the namespace, you'll see output like:
    ```
    [[kv_namespaces]]
-   binding = "IP_STORE"
-   id = "your-namespace-id-here"
+   binding = "PROD_IP_STORE"
+   id = "your-actual-namespace-id-here"
    ```
    
-   Copy this configuration and add it to your `wrangler.toml` file under the existing content.
+   **Important**: Update your `wrangler.production.toml` file with the actual namespace ID from the output above. This file is git-ignored to keep your KV namespace IDs private.
 
 6. **Set up authentication (optional):**
    If you want to require API token authentication:
@@ -121,18 +133,18 @@ npx wrangler dev
 
 7. **Deploy:**
    ```bash
-   # Deploy to production (uses [env.production.vars] from wrangler.toml)
-   npx wrangler deploy --env production
+   # Deploy to production using your private production config
+   npx wrangler deploy --config wrangler.production.toml --env production
    
-   # Or deploy to default environment
+   # Or deploy to default environment for testing
    npx wrangler deploy
    ```
 
    Your worker will be available at `https://your-worker-name.your-subdomain.workers.dev`
    
    **Environment Management:**
-   - `npx wrangler deploy` - Uses root configuration
-   - `npx wrangler deploy --env production` - Uses `[env.production.vars]` 
+   - `npx wrangler deploy` - Uses default configuration (safe for public repo)
+   - `npx wrangler deploy --config wrangler.production.toml --env production` - Uses private production config
    - `npx wrangler dev` - Local development with preview KV namespace
 
 ### Environment Variables
@@ -142,6 +154,7 @@ The worker uses the following environment variables:
 **Set in `.env` file:**
 - `CF_ZONE_ID`: Cloudflare Zone ID used for DNS updates
 - `CF_DOMAIN`: The domain name to use for DNS records
+- `KV_NAMESPACE`: KV namespace binding name (must match the binding in your wrangler config)
 
 **Set as Wrangler secrets:**
 - `CF_API_TOKEN` (secret): Cloudflare API token with permission to edit DNS records
@@ -164,7 +177,7 @@ The worker now automatically manages DNS record IDs without requiring manual set
 
 2. **Subsequent Requests**: The worker uses the stored record IDs to update DNS records efficiently
 
-**Note**: The worker requires a KV namespace called `IP_STORE` (set up during deployment) to store IP addresses and DNS record IDs. No manual DNS record ID setup is required - the worker handles this automatically.
+**Note**: The worker requires a KV namespace (configured via `KV_NAMESPACE` environment variable) to store IP addresses and DNS record IDs. The namespace binding name must match between your wrangler configuration and environment variable. No manual DNS record ID setup is required - the worker handles this automatically.
 
 ### Custom Domain (Optional)
 
@@ -181,10 +194,20 @@ To use a custom domain:
 ```
 whatismyip/
 ├── src/
-│   ├── lib.rs          # Main worker logic
-│   └── dns.rs          # Cloudflare DNS management
-├── Cargo.toml          # Rust dependencies
-├── wrangler.toml       # Cloudflare Workers configuration
+│   ├── lib.rs          # Main worker entry point and routing
+│   ├── auth.rs         # Authentication logic and token validation
+│   ├── config.rs       # Configuration management and environment variables
+│   ├── dns.rs          # Cloudflare DNS record management
+│   ├── ip.rs           # IP address extraction and validation
+│   ├── request.rs      # Request handling and validation
+│   ├── response.rs     # Response formatting (plain text, JSON, XML)
+│   └── service.rs      # Core service logic and IP storage
+├── Cargo.toml          # Rust dependencies and package configuration
+├── Cargo.lock          # Dependency lock file
+├── wrangler.toml       # Cloudflare Workers configuration (public)
+├── wrangler.production.toml.example  # Production config template
+├── .env.example        # Environment variables template
+├── .gitignore          # Git ignore patterns
 └── README.md           # This file
 ```
 

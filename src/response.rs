@@ -1,6 +1,6 @@
+use crate::request::Format;
 use serde::Serialize;
 use worker::*;
-use crate::request::Format;
 
 // Constants
 const HEADER_CONTENT_TYPE: &str = "Content-Type";
@@ -40,7 +40,8 @@ impl ResponseUtils {
             ipv4_escaped, ipv6_escaped
         );
         let mut resp = Response::ok(body)?;
-        resp.headers_mut().set(HEADER_CONTENT_TYPE, CONTENT_TYPE_XML)?;
+        resp.headers_mut()
+            .set(HEADER_CONTENT_TYPE, CONTENT_TYPE_XML)?;
         Ok(resp)
     }
 
@@ -63,7 +64,10 @@ mod tests {
     fn text_formatting() {
         assert_eq!(ResponseUtils::format_text("1.1.1.1", ""), "1.1.1.1\n\n");
         assert_eq!(ResponseUtils::format_text("", "::1"), "\n::1\n");
-        assert_eq!(ResponseUtils::format_text("1.1.1.1", "::1"), "1.1.1.1\n::1\n");
+        assert_eq!(
+            ResponseUtils::format_text("1.1.1.1", "::1"),
+            "1.1.1.1\n::1\n"
+        );
         assert_eq!(ResponseUtils::format_text("", ""), "\n\n");
     }
 
@@ -83,7 +87,12 @@ mod tests {
         ];
 
         for (input, expected, description) in test_cases {
-            assert_eq!(ResponseUtils::escape_xml(input), expected, "Failed: {}", description);
+            assert_eq!(
+                ResponseUtils::escape_xml(input),
+                expected,
+                "Failed: {}",
+                description
+            );
         }
     }
 
@@ -96,12 +105,7 @@ mod tests {
                 "<ip><ipv4>192.168.1.1</ipv4><ipv6>2001:db8::1</ipv6></ip>",
                 "both IPv4 and IPv6",
             ),
-            (
-                "",
-                "",
-                "<ip><ipv4></ipv4><ipv6></ipv6></ip>",
-                "empty IPs",
-            ),
+            ("", "", "<ip><ipv4></ipv4><ipv6></ipv6></ip>", "empty IPs"),
             (
                 "10.0.0.1",
                 "",
@@ -154,4 +158,4 @@ mod tests {
             );
         }
     }
-} 
+}

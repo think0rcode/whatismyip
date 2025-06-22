@@ -30,3 +30,9 @@ target/
 
 # Environment variables (contains sensitive data)
 .env
+
+# Production configuration files (contains sensitive KV namespace IDs)
+wrangler.production.toml
+wrangler.*.toml
+!wrangler.toml
+!*.example

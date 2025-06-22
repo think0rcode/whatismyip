@@ -14,16 +14,13 @@ main = "./worker/shim.mjs"
 type = "CompiledWasm"
 globs = ["**/*.wasm"]
 
-# Example KV namespace configuration - replace with your actual values
-# For production, create a separate wrangler.production.toml file
+# Production KV namespace configuration
 [[kv_namespaces]]
-binding = "KV_TEST"
-id = "your-kv-namespace-id-here"
-preview_id = "your-preview-kv-namespace-id-here"
+binding = "PROD_IP_STORE"
+id = "your-actual-production-kv-namespace-id"
+preview_id = "your-actual-preview-kv-namespace-id"
 
 [env.production.vars]
-# Environment variables loaded from .env file or set via wrangler secret
-# Copy .env.example to .env and fill in your actual values
 CF_ZONE_ID = { env = "CF_ZONE_ID" }
 CF_DOMAIN = { env = "CF_DOMAIN" }
-KV_NAMESPACE = "KV_TEST"
+KV_NAMESPACE = "PROD_IP_STORE" 
