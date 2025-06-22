@@ -1,0 +1,19 @@
+name = "whatismyip"
+main = "build/worker/shim.mjs"
+compatibility_date = "2023-12-01"
+
+[build]
+command = "cargo install -q worker-build && worker-build --release"
+
+# Production environment configuration
+[env.production]
+
+# Production KV namespace configuration
+[[env.production.kv_namespaces]]
+binding = "IP_STORE"
+id = "your-actual-production-kv-namespace-id"
+preview_id = "your-actual-preview-kv-namespace-id"
+
+[env.production.vars]
+CF_ZONE_ID = "your-actual-zone-id"
+CF_DOMAIN = "yourdomain.com"

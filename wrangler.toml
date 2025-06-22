@@ -5,14 +5,13 @@ compatibility_date = "2023-12-01"
 [build]
 command = "cargo install -q worker-build && worker-build --release"
 
-[build.upload]
-format = "modules"
-dir = "build"
-main = "./worker/shim.mjs"
+# Example KV namespace configuration - replace with your actual values
+# For production, create a separate wrangler.production.toml file
+[[kv_namespaces]]
+binding = "IP_STORE"
+id = "your-kv-namespace-id-here"
+preview_id = "your-preview-kv-namespace-id-here"
 
-[[build.upload.rules]]
-type = "CompiledWasm"
-globs = ["**/*.wasm"]
-
-[env.production.vars]
-# Set API_TOKEN as a secret in Cloudflare dashboard or via wrangler secret put API_TOKEN 
+[vars]
+CF_ZONE_ID = "your-zone-id-here"
+CF_DOMAIN = "your-domain.com"
