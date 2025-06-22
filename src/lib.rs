@@ -17,28 +17,6 @@ enum Format {
 }
 
 fn detect_format(req: &Request) -> Format {
-    if let Ok(Some(ct)) = req.headers().get("Content-Type") {
-        let ct = ct.to_lowercase();
-        if ct.contains("application/json") {
-            return Format::Json;
-        }
-        if ct.contains("application/xml") || ct.contains("text/xml") {
-            return Format::Xml;
-        }
-        if ct.contains("text/plain") {
-            return Format::Text;
-        }
-    }
-    if let Ok(url) = req.url() {
-        if let Some((_, v)) = url.query_pairs().find(|(k, _)| k == "format") {
-            match v.as_ref().to_lowercase().as_str() {
-                "json" => return Format::Json,
-                "xml" => return Format::Xml,
-                "text" => return Format::Text,
-                _ => {}
-            }
-        }
-    }
     if let Ok(Some(accept)) = req.headers().get("Accept") {
         let accept = accept.to_lowercase();
         if accept.contains("application/json") {

@@ -6,8 +6,8 @@ A Cloudflare Worker written in Rust that returns your public IP address in one o
 2. **JSON** – returns `{ "ipv4": "...", "ipv6": "..." }`.
 3. **XML** – returns `<ip><ipv4>...</ipv4><ipv6>...</ipv6></ip>`.
 
-The response type is chosen based on the request's `Content-Type` header. If that header is missing,
-the optional `format` query parameter or the `Accept` header is used as a fallback.
+The response type is chosen based on the request's `Accept` header. If that header is missing,
+the default `format` will be Plain text.
 
 ### Authentication
 
