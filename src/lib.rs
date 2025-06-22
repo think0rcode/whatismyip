@@ -62,7 +62,7 @@ fn split_ip(ip: &str) -> (String, String) {
 }
 
 fn text_body(ipv4: &str, ipv6: &str) -> String {
-    format!("{}\n{}", ipv4, ipv6)
+    format!("{}\n{}\n", ipv4, ipv6)
 }
 
 fn check_auth(req: &Request) -> bool {
@@ -83,7 +83,10 @@ async fn respond(format: Format, ipv4: String, ipv6: String) -> Result<Response>
         Format::Text => Response::ok(text_body(&ipv4, &ipv6)),
         Format::Json => Response::from_json(&IpPayload { ipv4, ipv6 }),
         Format::Xml => {
-            let mut resp = Response::ok(format!("<ip><ipv4>{}</ipv4><ipv6>{}</ipv6></ip>", ipv4, ipv6))?;
+            let ipv4_escaped = ipv4.replace('&', "&amp;").replace('<', "&lt;");
+            let ipv6_escaped = ipv6.replace('&', "&amp;").replace('<', "&lt;");
+            let body = format!("<ip><ipv4>{}</ipv4><ipv6>{}</ipv6></ip>", ipv4_escaped, ipv6_escaped);
+            let mut resp = Response::ok(body)?;
             resp.headers_mut().set("Content-Type", "application/xml")?;
             Ok(resp)
         }
@@ -114,10 +117,10 @@ mod tests {
 
     #[test]
     fn text_formatting() {
-        assert_eq!(text_body("1.1.1.1", ""), "1.1.1.1\n");
-        assert_eq!(text_body("", "::1"), "\n::1");
-        assert_eq!(text_body("1.1.1.1", "::1"), "1.1.1.1\n::1");
-        assert_eq!(text_body("", ""), "\n");
+        assert_eq!(text_body("1.1.1.1", ""), "1.1.1.1\n\n");
+        assert_eq!(text_body("", "::1"), "\n::1\n");
+        assert_eq!(text_body("1.1.1.1", "::1"), "1.1.1.1\n::1\n");
+        assert_eq!(text_body("", ""), "\n\n");
     }
 
     #[test]
