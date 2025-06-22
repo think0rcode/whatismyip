@@ -12,7 +12,9 @@ the optional `format` query parameter or the `Accept` header is used as a fallba
 ### Authentication
 
 If the `API_TOKEN` environment variable is provided at compile time, the worker
-expects an `Authorization: Bearer <token>` header on all requests.
+expects an `Authorization: Bearer <token>` header on all requests. The token
+comparison is performed using constant-time equality via the `subtle` crate to
+help avoid timing attacks.
 
 ## Tests
 

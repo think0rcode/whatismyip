@@ -1,5 +1,6 @@
 use worker::*;
 use serde::Serialize;
+use subtle::ConstantTimeEq;
 
 const API_TOKEN: Option<&str> = option_env!("API_TOKEN");
 
@@ -68,7 +69,8 @@ fn check_auth(req: &Request) -> bool {
     if let Some(token) = API_TOKEN {
         let expected = format!("Bearer {}", token);
         match req.headers().get("Authorization").ok().flatten() {
-            Some(ref h) if h == &expected => true,
+            Some(ref h)
+                if h.as_bytes().ct_eq(expected.as_bytes()).into() => true,
             _ => false,
         }
     } else {
