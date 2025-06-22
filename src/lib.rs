@@ -2,8 +2,6 @@ use worker::*;
 use serde::Serialize;
 use subtle::ConstantTimeEq;
 
-const API_TOKEN: Option<&str> = option_env!("API_TOKEN");
-
 #[derive(Serialize)]
 struct IpPayload {
     ipv4: String,
@@ -43,9 +41,9 @@ fn text_body(ipv4: &str, ipv6: &str) -> String {
     format!("{}\n{}\n", ipv4, ipv6)
 }
 
-fn check_auth(req: &Request) -> bool {
-    if let Some(token) = API_TOKEN {
-        let expected = format!("Bearer {}", token);
+fn check_auth(req: &Request, env: &Env) -> bool {
+    if let Ok(token) = env.secret("API_TOKEN") {
+        let expected = format!("Bearer {}", token.to_string());
         match req.headers().get("Authorization").ok().flatten() {
             Some(ref h)
                 if h.as_bytes().ct_eq(expected.as_bytes()).into() => true,
@@ -71,8 +69,8 @@ async fn respond(format: Format, ipv4: String, ipv6: String) -> Result<Response>
     }
 }
 
-pub async fn handler(req: Request) -> Result<Response> {
-    if !check_auth(&req) {
+pub async fn handler(req: Request, env: Env) -> Result<Response> {
+    if !check_auth(&req, &env) {
         return Response::error("Unauthorized", 401);
     }
     let ip = req
@@ -85,8 +83,8 @@ pub async fn handler(req: Request) -> Result<Response> {
 }
 
 #[event(fetch)]
-pub async fn main(req: Request, _env: Env, _ctx: Context) -> Result<Response> {
-    handler(req).await
+pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
+    handler(req, env).await
 }
 
 #[cfg(test)]
