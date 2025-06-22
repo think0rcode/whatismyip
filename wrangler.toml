@@ -20,5 +20,7 @@ id = "00000000000000000000000000000000"
 preview_id = "00000000000000000000000000000000"
 
 [env.production.vars]
-# Set API_TOKEN as a secret in Cloudflare dashboard or via wrangler secret put API_TOKEN
-CF_ZONE_ID = "00000000000000000000000000000000"
+# Environment variables loaded from .env file or set via wrangler secret
+# Copy .env.example to .env and fill in your actual values
+CF_ZONE_ID = { env = "CF_ZONE_ID" }
+CF_DOMAIN = { env = "CF_DOMAIN" }

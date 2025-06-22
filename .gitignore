@@ -27,3 +27,6 @@ target/
 
 # Cloudflare Workers build output
 /build
+
+# Environment variables (contains sensitive data)
+.env
